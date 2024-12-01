@@ -221,7 +221,7 @@ async function getEmployeesInSortedOrder(order) {
   let employees = await employee.findAll({ order: [["name", order]] });
   // Map employee details concurrently
   const employeesData = await Promise.all(
-    employees.map((emp) => getEmployeeDetails(emp)),
+    employees.map((emp) => getEmployeeDetails(emp))
   );
 
   return employeesData;
@@ -267,9 +267,19 @@ async function addNewEmployee(newEmployeeData) {
 
 app.post("/employees/new", async (req, res) => {
   try {
-    let newEmployee = req.body.newEmployee;
-    let response = await addNewEmployee(newEmployee);
-    return res.status(200).json(response);
+    const { name, email, departmentId, roleId } = req.body;
+
+    if (!name || !email) {
+      return res.status(400).json({ error: "Name and email are required" });
+    }
+
+    const response = await addNewEmployee({
+      name,
+      email,
+      departmentId,
+      roleId,
+    });
+    return res.status(201).json(response); // 201 Created
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -301,7 +311,7 @@ async function updateEmployeeById(newEmployeeBody, id) {
     });
     await employeeRole.create({
       employeeId: employeeData.id,
-      roleId: newEmployeeBody.role,
+      roleId: newEmployeeBody.roleId,
     });
   }
 
@@ -327,7 +337,7 @@ app.post("/employees/update/:id", async (req, res) => {
 });
 
 async function deleteById(id) {
-  let destroyedEmployee = employee.destroy({ where: { id } });
+  let destroyedEmployee = await employee.destroy({ where: { id } });
   if (destroyedEmployee === 0) {
     return {};
   }
