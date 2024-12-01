@@ -221,7 +221,7 @@ async function getEmployeesInSortedOrder(order) {
   let employees = await employee.findAll({ order: [["name", order]] });
   // Map employee details concurrently
   const employeesData = await Promise.all(
-    employees.map((emp) => getEmployeeDetails(emp))
+    employees.map((emp) => getEmployeeDetails(emp)),
   );
 
   return employeesData;
@@ -261,7 +261,7 @@ async function addNewEmployee(newEmployeeData) {
       roleId: newEmployeeData.roleId,
     });
   }
-  let employeeDetailsResult = getEmployeeDetails(newEmployee);
+  let employeeDetailsResult = await getEmployeeDetails(newEmployee);
   return employeeDetailsResult;
 }
 
@@ -270,6 +270,75 @@ app.post("/employees/new", async (req, res) => {
     let newEmployee = req.body.newEmployee;
     let response = await addNewEmployee(newEmployee);
     return res.status(200).json(response);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function updateEmployeeById(newEmployeeBody, id) {
+  let employeeData = await employee.findOne({ where: { id } });
+  if (!employeeData) {
+    return {};
+  }
+
+  if (employeeData.departmentId) {
+    await employeeDepartment.destroy({
+      where: {
+        employeeId: parseInt(employeeData.id),
+      },
+    });
+    await employeeDepartment.create({
+      employeeId: employeeData.id,
+      departmentId: newEmployeeBody.departmentId,
+    });
+  }
+
+  if (employeeData.roleId) {
+    await employeeRole.destroy({
+      where: {
+        employeeId: parseInt(employeeData.id),
+      },
+    });
+    await employeeRole.create({
+      employeeId: employeeData.id,
+      roleId: newEmployeeBody.role,
+    });
+  }
+
+  employeeData.set(newEmployeeBody);
+  let updatedEmployeeData = await employeeData.save();
+  let finalEmployeedata = await getEmployeeDetails(updatedEmployeeData);
+  return finalEmployeedata;
+}
+
+app.post("/employees/update/:id", async (req, res) => {
+  try {
+    let newEmployeeBody = req.body;
+    let id = req.params.id;
+
+    let response = await updateEmployeeById(newEmployeeBody, id);
+    if (!response) {
+      return res.status(404).json({ message: "employee not found" });
+    }
+    res.status(200).json(response);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function deleteById(id) {
+  let destroyedEmployee = employee.destroy({ where: { id } });
+  if (destroyedEmployee === 0) {
+    return {};
+  }
+  return { message: `Employee with ID ${id} has been deleted` };
+}
+
+app.post("/employees/delete", async (req, res) => {
+  try {
+    let id = parseInt(req.body.id);
+    let response = await deleteById(id);
+    res.status(200).json(response);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
