@@ -8,6 +8,7 @@ let { employeeRole } = require("./models/employeeRole.model");
 let { sequelize } = require("./lib/index");
 
 const app = express();
+app.use(express.json());
 
 app.get("/seed_db", async (req, res) => {
   await sequelize.sync({ force: true });
@@ -211,6 +212,64 @@ app.get("/employees/role/:roleId", async (req, res) => {
       });
     }
     res.status(200).json({ employees: employees });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function getEmployeesInSortedOrder(order) {
+  let employees = await employee.findAll({ order: [["name", order]] });
+  // Map employee details concurrently
+  const employeesData = await Promise.all(
+    employees.map((emp) => getEmployeeDetails(emp))
+  );
+
+  return employeesData;
+}
+
+app.get("/employees/sort-by-name", async (req, res) => {
+  try {
+    let order = req.query.order;
+    let employees = await getEmployeesInSortedOrder(order);
+    if (!employees) {
+      return res.status(404).json({
+        message: "No employees found",
+      });
+    }
+    res.status(200).json({ employees: employees });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+async function addNewEmployee(newEmployeeData) {
+  let newEmployee = await employee.create({
+    name: newEmployeeData.name,
+    email: newEmployeeData.email,
+  });
+
+  if (newEmployeeData.departmentId) {
+    await employeeDepartment.create({
+      employeeId: newEmployee.id,
+      departmentId: newEmployeeData.departmentId,
+    });
+  }
+
+  if (newEmployeeData.roleId) {
+    await employeeRole.create({
+      employeeId: newEmployee.id,
+      roleId: newEmployeeData.roleId,
+    });
+  }
+  let employeeDetailsResult = getEmployeeDetails(newEmployee);
+  return employeeDetailsResult;
+}
+
+app.post("/employees/new", async (req, res) => {
+  try {
+    let newEmployee = req.body.newEmployee;
+    let response = await addNewEmployee(newEmployee);
+    return res.status(200).json(response);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
